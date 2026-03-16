@@ -19,10 +19,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install feedparser
-
-      - name: Debug feeds
-        run: python debug_feeds.py
+        run: pip install feedparser requests beautifulsoup4
 
       - name: Run RSS checker
         env:
