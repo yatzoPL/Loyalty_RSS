@@ -2,9 +2,8 @@ name: RSS Daily Digest
 
 on:
   schedule:
-    # Every day at 07:00 UTC (09:00 Warsaw time)
     - cron: "0 7 * * *"
-  workflow_dispatch:  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   check-feeds:
@@ -23,28 +22,7 @@ jobs:
         run: pip install feedparser
 
       - name: Debug feeds
-        run: |
-          python -c "
-import feedparser
-headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
-
-urls = [
-    'https://app.getbeamer.com/loyaltylion/en?rss=true',
-    'https://blog.smile.io/tag/smile-updates/rss/',
-    'https://blog.smile.io/rss/',
-]
-for url in urls:
-    f = feedparser.parse(url, request_headers=headers)
-    print(f'URL: {url}')
-    print(f'  Status: {f.get(\"status\", \"N/A\")}')
-    print(f'  Entries: {len(f.entries)}')
-    if f.entries:
-        e = f.entries[0]
-        print(f'  First title: {e.get(\"title\")}')
-        print(f'  Tags: {[t.get(\"term\") for t in e.get(\"tags\", [])]}')
-        print(f'  Category: {e.get(\"category\")}')
-    print()
-"
+        run: python debug_feeds.py
 
       - name: Run RSS checker
         env:
