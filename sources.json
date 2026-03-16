@@ -1,14 +1,7 @@
 [
   {
-    "name": "Loyalty Lion",
-    "feed_url": "https://app.getbeamer.com/loyaltylion/en?rss=true",
-    "fallback_feed_url": "https://www.getbeamer.com/loyaltylion/en?rss=true",
-    "category_filter": null
-  },
-  {
     "name": "Smile.io",
-    "feed_url": "https://blog.smile.io/tag/smile-updates/rss/",
-    "fallback_feed_url": "https://blog.smile.io/rss/",
+    "feed_url": "https://blog.smile.io/rss/",
     "category_filter": "Smile Updates"
   },
   {
