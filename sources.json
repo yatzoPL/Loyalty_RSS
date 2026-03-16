@@ -24,6 +24,11 @@
     "category_filter": null
   },
   {
+    "name": "LoyaltyLion",
+    "type": "scraper",
+    "scraper": "LoyaltyLion"
+  },
+  {
     "name": "Influence.io",
     "type": "scraper",
     "scraper": "Influence.io"

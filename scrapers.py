@@ -95,8 +95,38 @@ def scrape_influence(url: str = f"{BASE_INFLUENCE}/updates") -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# LoyaltyLion
+# ---------------------------------------------------------------------------
+def scrape_loyaltylion(url: str = "https://loyaltylion.com/platform/product-updates") -> list[dict]:
+    """
+    Scrapes seasonal product update links from loyaltylion.com/platform/product-updates.
+    Each entry is a link to a seasonal page like /platform/summer-2025-product-updates.
+    """
+    soup = fetch_html(url)
+    pattern = re.compile(r"/platform/[a-z]+-\d{4}-product-updates")
+    results = []
+
+    for a in soup.find_all("a", href=pattern):
+        href = a.get("href", "").strip()
+        if href.startswith("/"):
+            href = "https://loyaltylion.com" + href
+
+        title = a.get_text(strip=True)
+        if not title:
+            # Derive title from URL slug e.g. summer-2025-product-updates
+            slug = href.split("/platform/")[-1].replace("-", " ").title()
+            title = f"LoyaltyLion: {slug}"
+
+        if href:
+            results.append({"title": title, "url": href})
+
+    return dedupe(results)
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 SCRAPERS = {
     "Influence.io": scrape_influence,
+    "LoyaltyLion": scrape_loyaltylion,
 }
