@@ -15,6 +15,9 @@ HEADERS = {
     )
 }
 
+BASE_INFLUENCE = "https://www.influence.io"
+BASE_VOUCHERIFY = "https://docs.voucherify.io/changelog/changelog"
+
 
 def fetch_html(url: str) -> BeautifulSoup:
     resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -22,20 +25,36 @@ def fetch_html(url: str) -> BeautifulSoup:
     return BeautifulSoup(resp.text, "html.parser")
 
 
-def scrape_influence(url: str = "https://www.influence.io/updates") -> list[dict]:
-    """Scrapes product update items from influence.io/updates."""
+def dedupe(items: list[dict]) -> list[dict]:
+    seen = set()
+    return [i for i in items if not (i["url"] in seen or seen.add(i["url"]))]
+
+
+# ---------------------------------------------------------------------------
+# Influence.io
+# ---------------------------------------------------------------------------
+def scrape_influence(url: str = f"{BASE_INFLUENCE}/updates") -> list[dict]:
+    """
+    Links on the page are relative: /updates/<slug>
+    We match both relative and absolute forms, then normalise to absolute.
+    """
     soup = fetch_html(url)
+    pattern = re.compile(r"(^/updates/.+|^https://www\.influence\.io/updates/.+)")
     results = []
 
-    for a in soup.find_all("a", href=re.compile(r"^https://www\.influence\.io/updates/.+")):
-        if "support.influence" in a.get("href", ""):
+    for a in soup.find_all("a", href=pattern):
+        href = a.get("href", "").strip()
+        if "support.influence" in href:
             continue
-        href = a["href"].strip()
 
-        # Walk up DOM to find h3 title
+        # Normalise to absolute URL
+        if href.startswith("/"):
+            href = BASE_INFLUENCE + href
+
+        # Walk up DOM to find the h3 title for this entry
         parent = a.find_parent()
         h3 = None
-        for _ in range(6):
+        for _ in range(8):
             if parent is None:
                 break
             h3 = parent.find("h3")
@@ -43,35 +62,54 @@ def scrape_influence(url: str = "https://www.influence.io/updates") -> list[dict
                 break
             parent = parent.find_parent()
 
-        title = h3.get_text(strip=True) if h3 else href.split("/")[-1].replace("-", " ").title()
+        title = (
+            h3.get_text(strip=True)
+            if h3
+            else href.split("/")[-1].replace("-", " ").title()
+        )
         if title and href:
             results.append({"title": title, "url": href})
 
-    seen = set()
-    return [r for r in results if not (r["url"] in seen or seen.add(r["url"]))]
+    return dedupe(results)
 
 
-def scrape_voucherify(url: str = "https://docs.voucherify.io/changelog/changelog") -> list[dict]:
-    """Scrapes changelog date entries from Voucherify."""
+# ---------------------------------------------------------------------------
+# Voucherify
+# ---------------------------------------------------------------------------
+def scrape_voucherify(url: str = BASE_VOUCHERIFY) -> list[dict]:
+    """
+    Changelog entries are h2 headings with date text.
+    The anchor id lives either on the h2 itself or on a child <a> tag.
+    """
     soup = fetch_html(url)
     results = []
-    base = "https://docs.voucherify.io/changelog/changelog"
 
     for h2 in soup.find_all("h2"):
         text = h2.get_text(strip=True)
+
+        # Keep only date-like headings
         if not re.search(r"\d{4}|\d+(st|nd|rd|th)", text):
             continue
+
+        # Try to get anchor id from h2 or its child <a>
         anchor = h2.get("id", "")
         if not anchor:
-            a = h2.find("a", id=True)
-            anchor = a["id"] if a else ""
-        full_url = f"{base}#{anchor}" if anchor else base
+            child_a = h2.find("a", id=True)
+            if child_a:
+                anchor = child_a["id"]
+        if not anchor:
+            # Last resort: slugify the text
+            anchor = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+        full_url = f"{url}#{anchor}"
         results.append({"title": text, "url": full_url})
 
-    seen = set()
-    return [r for r in results if not (r["url"] in seen or seen.add(r["url"]))]
+    return dedupe(results)
 
 
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
 SCRAPERS = {
     "Influence.io": scrape_influence,
     "Voucherify": scrape_voucherify,
