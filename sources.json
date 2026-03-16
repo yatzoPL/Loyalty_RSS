@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Loyalty Lion",
+    "feed_url": "https://app.getbeamer.com/loyaltylion/en?rss=true",
+    "filter": null
+  },
+  {
+    "name": "Smile.io",
+    "feed_url": "https://blog.smile.io/tag/smile-updates/rss/",
+    "filter": null,
+    "fallback_feed_url": "https://blog.smile.io/feed",
+    "fallback_category": "Smile Updates"
+  },
+  {
+    "name": "Antavo",
+    "feed_url": "https://antavo.com/feed/",
+    "filter": null
+  }
+]
