@@ -2,7 +2,7 @@
   {
     "name": "Smile.io",
     "feed_url": "https://blog.smile.io/rss/",
-    "category_filter": "Smile Updates"
+    "category_filter": null
   },
   {
     "name": "Antavo",
