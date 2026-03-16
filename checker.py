@@ -156,14 +156,15 @@ def build_html_email(updates: dict) -> str:
 
 
 def send_email(subject: str, html_body: str) -> None:
+    recipients = [r.strip() for r in RECIPIENT_EMAIL.split(",") if r.strip()]
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = GMAIL_USER
-    msg["To"] = RECIPIENT_EMAIL
+    msg["To"] = ", ".join(recipients)
     msg.attach(MIMEText(html_body, "html", "utf-8"))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-        server.sendmail(GMAIL_USER, RECIPIENT_EMAIL, msg.as_string())
+        server.sendmail(GMAIL_USER, recipients, msg.as_string())
 
 
 def main() -> None:
