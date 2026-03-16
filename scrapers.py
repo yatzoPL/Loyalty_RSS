@@ -16,7 +16,6 @@ HEADERS = {
 }
 
 BASE_INFLUENCE = "https://www.influence.io"
-BASE_VOUCHERIFY = "https://docs.voucherify.io/changelog/changelog"
 
 
 def fetch_html(url: str) -> BeautifulSoup:
@@ -35,8 +34,11 @@ def dedupe(items: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 def scrape_influence(url: str = f"{BASE_INFLUENCE}/updates") -> list[dict]:
     """
-    Links on the page are relative: /updates/<slug>
-    We match both relative and absolute forms, then normalise to absolute.
+    Each update block has:
+    - A date text node near the top of the block
+    - An h3 title
+    - A 'More' link to /updates/<slug>
+    Strategy: find all 'More' links, then walk up to find h3 and date.
     """
     soup = fetch_html(url)
     pattern = re.compile(r"(^/updates/.+|^https://www\.influence\.io/updates/.+)")
@@ -51,14 +53,28 @@ def scrape_influence(url: str = f"{BASE_INFLUENCE}/updates") -> list[dict]:
         if href.startswith("/"):
             href = BASE_INFLUENCE + href
 
-        # Walk up DOM to find the h3 title for this entry
+        # Walk up DOM to find h3 title and date
         parent = a.find_parent()
         h3 = None
-        for _ in range(8):
+        date_text = ""
+
+        for _ in range(10):
             if parent is None:
                 break
-            h3 = parent.find("h3")
-            if h3:
+            if not h3:
+                h3 = parent.find("h3")
+            # Date is usually a plain text node or <p>/<div> near the block top
+            # Look for text matching date pattern e.g. "October 10, 2025"
+            if not date_text:
+                for el in parent.find_all(text=re.compile(
+                    r"(January|February|March|April|May|June|July|August|"
+                    r"September|October|November|December)\s+\d{1,2},\s+\d{4}"
+                )):
+                    candidate = el.strip()
+                    if candidate:
+                        date_text = candidate
+                        break
+            if h3 and date_text:
                 break
             parent = parent.find_parent()
 
@@ -67,42 +83,13 @@ def scrape_influence(url: str = f"{BASE_INFLUENCE}/updates") -> list[dict]:
             if h3
             else href.split("/")[-1].replace("-", " ").title()
         )
+
         if title and href:
-            results.append({"title": title, "url": href})
-
-    return dedupe(results)
-
-
-# ---------------------------------------------------------------------------
-# Voucherify
-# ---------------------------------------------------------------------------
-def scrape_voucherify(url: str = BASE_VOUCHERIFY) -> list[dict]:
-    """
-    Changelog entries are h2 headings with date text.
-    The anchor id lives either on the h2 itself or on a child <a> tag.
-    """
-    soup = fetch_html(url)
-    results = []
-
-    for h2 in soup.find_all("h2"):
-        text = h2.get_text(strip=True)
-
-        # Keep only date-like headings
-        if not re.search(r"\d{4}|\d+(st|nd|rd|th)", text):
-            continue
-
-        # Try to get anchor id from h2 or its child <a>
-        anchor = h2.get("id", "")
-        if not anchor:
-            child_a = h2.find("a", id=True)
-            if child_a:
-                anchor = child_a["id"]
-        if not anchor:
-            # Last resort: slugify the text
-            anchor = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-
-        full_url = f"{url}#{anchor}"
-        results.append({"title": text, "url": full_url})
+            results.append({
+                "title": title,
+                "url": href,
+                "published": date_text,
+            })
 
     return dedupe(results)
 
@@ -112,5 +99,4 @@ def scrape_voucherify(url: str = BASE_VOUCHERIFY) -> list[dict]:
 # ---------------------------------------------------------------------------
 SCRAPERS = {
     "Influence.io": scrape_influence,
-    "Voucherify": scrape_voucherify,
 }
