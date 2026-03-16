@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-RSS Daily Digest – HOK Home
+RSS Daily Digest – Dotdigital
 Checks configured RSS feeds for new articles and sends a daily email digest.
 """
 
 import json
 import os
 import smtplib
-import sys
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -25,12 +24,17 @@ SEEN_FILE = BASE_DIR / "seen.json"
 # ---------------------------------------------------------------------------
 # Config from environment variables (set as GitHub Secrets)
 # ---------------------------------------------------------------------------
-GMAIL_USER = os.environ["GMAIL_USER"]          # your.email@gmail.com
-GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]  # 16-char App Password
+GMAIL_USER = os.environ["GMAIL_USER"]
+GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", GMAIL_USER)
 
+# Try to look like a real browser to avoid 403s from some feeds
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; RSSDigest/1.0; +https://github.com)"
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    )
 }
 
 
@@ -38,7 +42,6 @@ HEADERS = {
 # Helpers
 # ---------------------------------------------------------------------------
 def load_seen() -> dict:
-    """Load the set of already-seen article URLs per source."""
     if SEEN_FILE.exists():
         with open(SEEN_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -51,45 +54,40 @@ def save_seen(seen: dict) -> None:
 
 
 def fetch_feed(url: str) -> feedparser.FeedParserDict:
-    """Parse a feed URL; feedparser handles HTTP headers internally."""
-    feed = feedparser.parse(url, request_headers=HEADERS)
-    return feed
+    return feedparser.parse(url, request_headers=HEADERS)
+
+
+def entry_matches_category(entry: dict, category_filter: str) -> bool:
+    """Check if an entry belongs to the required category."""
+    tags = [t.get("term", "") for t in entry.get("tags", [])]
+    cats = [entry.get("category", "")] + tags
+    return any(category_filter.lower() in c.lower() for c in cats)
 
 
 def get_new_entries(source: dict, seen_urls: set) -> list[dict]:
-    """
-    Fetch the feed for a source and return entries not seen before.
-    Applies optional category filter.
-    """
+    """Fetch feed and return only entries not seen before."""
     feed = fetch_feed(source["feed_url"])
     entries = feed.entries
 
-    # If primary URL returned no entries and there's a fallback, try it
+    # Fallback URL if primary returns nothing
     if not entries and source.get("fallback_feed_url"):
+        print(f"  → primary empty, trying fallback feed…", end=" ")
         feed = fetch_feed(source["fallback_feed_url"])
         entries = feed.entries
+
+    category_filter = source.get("category_filter")
 
     new_entries = []
     for entry in entries:
         url = entry.get("link", "")
         if not url or url in seen_urls:
             continue
-
-        # Category filter (used for Smile.io fallback)
-        if source.get("fallback_category"):
-            tags = [t.get("term", "") for t in entry.get("tags", [])]
-            categories = [entry.get("category", "")] + tags
-            match = any(
-                source["fallback_category"].lower() in c.lower()
-                for c in categories
-            )
-            if not match:
-                continue
+        if category_filter and not entry_matches_category(entry, category_filter):
+            continue
 
         new_entries.append({
             "title": entry.get("title", "(brak tytułu)"),
             "url": url,
-            "summary": entry.get("summary", ""),
             "published": entry.get("published", ""),
         })
 
@@ -97,7 +95,6 @@ def get_new_entries(source: dict, seen_urls: set) -> list[dict]:
 
 
 def build_html_email(updates: dict[str, list]) -> str:
-    """Build a clean HTML email body."""
     today = datetime.now(timezone.utc).strftime("%d.%m.%Y")
     total = sum(len(v) for v in updates.values())
 
@@ -129,7 +126,7 @@ def build_html_email(updates: dict[str, list]) -> str:
         {items}
         """
 
-    html = f"""<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:sans-serif;">
@@ -138,7 +135,6 @@ def build_html_email(updates: dict[str, list]) -> str:
       <table width="560" cellpadding="0" cellspacing="0"
              style="background:#ffffff;border-radius:8px;overflow:hidden;">
 
-        <!-- Header -->
         <tr>
           <td style="background:#1a1a1a;padding:24px 32px;">
             <span style="color:#ffffff;font-size:18px;font-weight:700;">
@@ -149,7 +145,6 @@ def build_html_email(updates: dict[str, list]) -> str:
           </td>
         </tr>
 
-        <!-- Body -->
         <tr>
           <td style="padding:8px 32px 32px 32px;">
             <table width="100%" cellpadding="0" cellspacing="0">
@@ -158,11 +153,10 @@ def build_html_email(updates: dict[str, list]) -> str:
           </td>
         </tr>
 
-        <!-- Footer -->
         <tr>
           <td style="background:#f9f9f9;padding:16px 32px;border-top:1px solid #eee;">
             <span style="color:#bbb;font-size:11px;">
-              HOK Home RSS Digest · generowany automatycznie
+              Dotdigital RSS Digest · generowany automatycznie
             </span>
           </td>
         </tr>
@@ -172,7 +166,6 @@ def build_html_email(updates: dict[str, list]) -> str:
   </table>
 </body>
 </html>"""
-    return html
 
 
 def send_email(subject: str, html_body: str) -> None:
@@ -212,7 +205,6 @@ def main() -> None:
 
         if new_entries:
             updates[name] = new_entries
-            # Mark all new URLs as seen
             seen[name] = list(seen_urls | {e["url"] for e in new_entries})
 
     if not updates:
@@ -221,7 +213,7 @@ def main() -> None:
         return
 
     total = sum(len(v) for v in updates.values())
-    subject = f"📬 Loyalty Tech: {total} nowych artykułów ({datetime.now().strftime('%d.%m.%Y')})"
+    subject = f"📬 Dotdigital: {total} nowych artykułów ({datetime.now().strftime('%d.%m.%Y')})"
     html = build_html_email(updates)
 
     print(f"Sending email: {subject}")
