@@ -199,7 +199,7 @@ def main() -> None:
         return
 
     total = sum(len(v) for v in updates.values())
-    subject = f"Dotdigital Loyalty: {total} new items ({datetime.now().strftime('%d.%m.%Y')})"
+    subject = f"What's New in Loyalty? | Daily Digest: {total} new items ({datetime.now().strftime('%d.%m.%Y')})"
     html = build_html_email(updates)
 
     print(f"Sending email: {subject}")
