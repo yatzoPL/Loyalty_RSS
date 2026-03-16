@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-RSS + Scraper Daily Digest – Dotdigital
-Checks RSS feeds and scraped sources for new content and sends a daily email.
+RSS + Scraper Daily Digest – Dotdigital Loyalty
 """
 
 import json
@@ -64,7 +63,7 @@ def get_new_rss_entries(source: dict, seen_urls: set) -> list[dict]:
             if not any(category_filter.lower() in c.lower() for c in cats):
                 continue
         new_entries.append({
-            "title": entry.get("title", "(brak tytulu)"),
+            "title": entry.get("title", "(no title)"),
             "url": url,
             "published": entry.get("published", ""),
         })
@@ -80,7 +79,7 @@ def get_new_scraped_entries(source: dict, seen_urls: set) -> list[dict]:
 
     all_entries = scraper_fn()
     return [
-        {"title": e.get("title", "(brak tytulu)"), "url": e["url"], "published": ""}
+        {"title": e.get("title", "(no title)"), "url": e["url"], "published": ""}
         for e in all_entries
         if e.get("url") and e["url"] not in seen_urls
     ]
@@ -132,7 +131,7 @@ def build_html_email(updates: dict) -> str:
               Loyalty Tech Updates
             </span>
             <br>
-            <span style="color:#aaa;font-size:12px;">{today} · {total} nowych pozycji</span>
+            <span style="color:#aaa;font-size:12px;">{today} &middot; {total} new items</span>
           </td>
         </tr>
         <tr>
@@ -145,7 +144,7 @@ def build_html_email(updates: dict) -> str:
         <tr>
           <td style="background:#f9f9f9;padding:16px 32px;border-top:1px solid #eee;">
             <span style="color:#bbb;font-size:11px;">
-              Dotdigital RSS Digest · generowany automatycznie
+              Dotdigital Loyalty RSS Digest &middot; auto-generated
             </span>
           </td>
         </tr>
@@ -195,12 +194,12 @@ def main() -> None:
             seen[name] = list(seen_urls | {e["url"] for e in new_entries})
 
     if not updates:
-        print("No new articles. No email sent.")
+        print("No new items. No email sent.")
         save_seen(seen)
         return
 
     total = sum(len(v) for v in updates.values())
-    subject = f"Dotdigital: {total} nowych pozycji ({datetime.now().strftime('%d.%m.%Y')})"
+    subject = f"Dotdigital Loyalty: {total} new items ({datetime.now().strftime('%d.%m.%Y')})"
     html = build_html_email(updates)
 
     print(f"Sending email: {subject}")

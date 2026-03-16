@@ -12,14 +12,15 @@
     "category_filter": null
   },
   {
+    "name": "Talon One",
+    "type": "rss",
+    "feed_url": "https://docs.talon.one/whats-new/rss.xml",
+    "category_filter": null
+  },
+  {
     "name": "Influence.io",
     "type": "scraper",
     "scraper": "Influence.io"
-  },
-  {
-    "name": "Talon One",
-    "type": "scraper",
-    "scraper": "Talon One"
   },
   {
     "name": "Voucherify",
