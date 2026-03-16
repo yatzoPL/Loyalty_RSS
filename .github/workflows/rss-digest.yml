@@ -22,6 +22,30 @@ jobs:
       - name: Install dependencies
         run: pip install feedparser
 
+      - name: Debug feeds
+        run: |
+          python -c "
+import feedparser
+headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
+
+urls = [
+    'https://app.getbeamer.com/loyaltylion/en?rss=true',
+    'https://blog.smile.io/tag/smile-updates/rss/',
+    'https://blog.smile.io/rss/',
+]
+for url in urls:
+    f = feedparser.parse(url, request_headers=headers)
+    print(f'URL: {url}')
+    print(f'  Status: {f.get(\"status\", \"N/A\")}')
+    print(f'  Entries: {len(f.entries)}')
+    if f.entries:
+        e = f.entries[0]
+        print(f'  First title: {e.get(\"title\")}')
+        print(f'  Tags: {[t.get(\"term\") for t in e.get(\"tags\", [])]}')
+        print(f'  Category: {e.get(\"category\")}')
+    print()
+"
+
       - name: Run RSS checker
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
