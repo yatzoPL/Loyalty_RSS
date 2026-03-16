@@ -1,12 +1,29 @@
 [
   {
     "name": "Smile.io",
+    "type": "rss",
     "feed_url": "https://blog.smile.io/rss/",
     "category_filter": null
   },
   {
     "name": "Antavo",
+    "type": "rss",
     "feed_url": "https://antavo.com/feed/",
     "category_filter": null
+  },
+  {
+    "name": "Influence.io",
+    "type": "scraper",
+    "scraper": "Influence.io"
+  },
+  {
+    "name": "Talon One",
+    "type": "scraper",
+    "scraper": "Talon One"
+  },
+  {
+    "name": "Voucherify",
+    "type": "scraper",
+    "scraper": "Voucherify"
   }
 ]

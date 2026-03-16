@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-RSS Daily Digest – Dotdigital
-Checks configured RSS feeds for new articles and sends a daily email digest.
+RSS + Scraper Daily Digest – Dotdigital
+Checks RSS feeds and scraped sources for new content and sends a daily email.
 """
 
 import json
@@ -14,21 +14,14 @@ from pathlib import Path
 
 import feedparser
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).parent
 SOURCES_FILE = BASE_DIR / "sources.json"
 SEEN_FILE = BASE_DIR / "seen.json"
 
-# ---------------------------------------------------------------------------
-# Config from environment variables (set as GitHub Secrets)
-# ---------------------------------------------------------------------------
 GMAIL_USER = os.environ["GMAIL_USER"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", GMAIL_USER)
 
-# Try to look like a real browser to avoid 403s from some feeds
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -38,9 +31,6 @@ HEADERS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 def load_seen() -> dict:
     if SEEN_FILE.exists():
         with open(SEEN_FILE, "r", encoding="utf-8") as f:
@@ -53,40 +43,28 @@ def save_seen(seen: dict) -> None:
         json.dump(seen, f, indent=2, ensure_ascii=False)
 
 
-def fetch_feed(url: str) -> feedparser.FeedParserDict:
-    return feedparser.parse(url, request_headers=HEADERS)
-
-
-def entry_matches_category(entry: dict, category_filter: str) -> bool:
-    """Check if an entry belongs to the required category."""
-    tags = [t.get("term", "") for t in entry.get("tags", [])]
-    cats = [entry.get("category", "")] + tags
-    return any(category_filter.lower() in c.lower() for c in cats)
-
-
-def get_new_entries(source: dict, seen_urls: set) -> list[dict]:
-    """Fetch feed and return only entries not seen before."""
-    feed = fetch_feed(source["feed_url"])
+def get_new_rss_entries(source: dict, seen_urls: set) -> list[dict]:
+    feed = feedparser.parse(source["feed_url"], request_headers=HEADERS)
     entries = feed.entries
 
-    # Fallback URL if primary returns nothing
     if not entries and source.get("fallback_feed_url"):
-        print(f"  → primary empty, trying fallback feed…", end=" ")
-        feed = fetch_feed(source["fallback_feed_url"])
+        feed = feedparser.parse(source["fallback_feed_url"], request_headers=HEADERS)
         entries = feed.entries
 
     category_filter = source.get("category_filter")
-
     new_entries = []
+
     for entry in entries:
         url = entry.get("link", "")
         if not url or url in seen_urls:
             continue
-        if category_filter and not entry_matches_category(entry, category_filter):
-            continue
-
+        if category_filter:
+            tags = [t.get("term", "") for t in entry.get("tags", [])]
+            cats = [entry.get("category", "")] + tags
+            if not any(category_filter.lower() in c.lower() for c in cats):
+                continue
         new_entries.append({
-            "title": entry.get("title", "(brak tytułu)"),
+            "title": entry.get("title", "(brak tytulu)"),
             "url": url,
             "published": entry.get("published", ""),
         })
@@ -94,7 +72,21 @@ def get_new_entries(source: dict, seen_urls: set) -> list[dict]:
     return new_entries
 
 
-def build_html_email(updates: dict[str, list]) -> str:
+def get_new_scraped_entries(source: dict, seen_urls: set) -> list[dict]:
+    from scrapers import SCRAPERS
+    scraper_fn = SCRAPERS.get(source["scraper"])
+    if not scraper_fn:
+        raise ValueError(f"Unknown scraper: {source['scraper']}")
+
+    all_entries = scraper_fn()
+    return [
+        {"title": e.get("title", "(brak tytulu)"), "url": e["url"], "published": ""}
+        for e in all_entries
+        if e.get("url") and e["url"] not in seen_urls
+    ]
+
+
+def build_html_email(updates: dict) -> str:
     today = datetime.now(timezone.utc).strftime("%d.%m.%Y")
     total = sum(len(v) for v in updates.values())
 
@@ -134,17 +126,15 @@ def build_html_email(updates: dict[str, list]) -> str:
     <tr><td align="center" style="padding:32px 16px;">
       <table width="560" cellpadding="0" cellspacing="0"
              style="background:#ffffff;border-radius:8px;overflow:hidden;">
-
         <tr>
           <td style="background:#1a1a1a;padding:24px 32px;">
             <span style="color:#ffffff;font-size:18px;font-weight:700;">
-              📬 Loyalty Tech Updates
+              Loyalty Tech Updates
             </span>
             <br>
-            <span style="color:#aaa;font-size:12px;">{today} · {total} nowych artykułów</span>
+            <span style="color:#aaa;font-size:12px;">{today} · {total} nowych pozycji</span>
           </td>
         </tr>
-
         <tr>
           <td style="padding:8px 32px 32px 32px;">
             <table width="100%" cellpadding="0" cellspacing="0">
@@ -152,7 +142,6 @@ def build_html_email(updates: dict[str, list]) -> str:
             </table>
           </td>
         </tr>
-
         <tr>
           <td style="background:#f9f9f9;padding:16px 32px;border-top:1px solid #eee;">
             <span style="color:#bbb;font-size:11px;">
@@ -160,7 +149,6 @@ def build_html_email(updates: dict[str, list]) -> str:
             </span>
           </td>
         </tr>
-
       </table>
     </td></tr>
   </table>
@@ -174,31 +162,30 @@ def send_email(subject: str, html_body: str) -> None:
     msg["From"] = GMAIL_USER
     msg["To"] = RECIPIENT_EMAIL
     msg.attach(MIMEText(html_body, "html", "utf-8"))
-
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
         server.sendmail(GMAIL_USER, RECIPIENT_EMAIL, msg.as_string())
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 def main() -> None:
     with open(SOURCES_FILE, "r", encoding="utf-8") as f:
         sources = json.load(f)
 
     seen = load_seen()
-    updates: dict[str, list] = {}
+    updates = {}
 
     for source in sources:
         name = source["name"]
         seen_urls = set(seen.get(name, []))
 
-        print(f"Checking: {name} …", end=" ")
+        print(f"Checking: {name} ...", end=" ")
         try:
-            new_entries = get_new_entries(source, seen_urls)
+            if source.get("type") == "scraper":
+                new_entries = get_new_scraped_entries(source, seen_urls)
+            else:
+                new_entries = get_new_rss_entries(source, seen_urls)
         except Exception as exc:
-            print(f"ERROR – {exc}")
+            print(f"ERROR - {exc}")
             continue
 
         print(f"{len(new_entries)} new")
@@ -213,7 +200,7 @@ def main() -> None:
         return
 
     total = sum(len(v) for v in updates.values())
-    subject = f"📬 Dotdigital: {total} nowych artykułów ({datetime.now().strftime('%d.%m.%Y')})"
+    subject = f"Dotdigital: {total} nowych pozycji ({datetime.now().strftime('%d.%m.%Y')})"
     html = build_html_email(updates)
 
     print(f"Sending email: {subject}")
