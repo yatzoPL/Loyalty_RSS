@@ -1,82 +1,93 @@
-# RSS Daily Digest
+# Loyalty Tech Weekly Digest
 
-Automatyczny codzienny email z nowymi artykułami z monitorowanych źródeł loyalty tech.
+Automated weekly email digest monitoring product updates from loyalty tech platforms. Runs every Tuesday at 09:00 Warsaw time via GitHub Actions.
 
-## Struktura plików
+## Sources
+
+| Source | Type | URL |
+|--------|------|-----|
+| Smile.io | RSS | `https://blog.smile.io/rss/` |
+| Antavo | RSS | `https://antavo.com/feed/` |
+| Talon One | RSS | `https://docs.talon.one/whats-new/rss.xml` |
+| Voucherify | RSS | `https://docs.voucherify.io/changelog/changelog/rss.xml` |
+| LoyaltyLion | Scraper | `https://loyaltylion.com/platform/product-updates` |
+| Influence.io | Scraper | `https://www.influence.io/updates` |
+
+## File Structure
 
 ```
-rss-digest/
-├── checker.py          # Główny skrypt
-├── sources.json        # Lista źródeł RSS
-├── seen.json           # Stan (które URL już widziano) – generowany automatycznie
-├── requirements.txt    # Zależności Python
+├── checker.py          # Main script – checks feeds, sends email
+├── scrapers.py         # Scraper functions for non-RSS sources
+├── sources.json        # Source configuration
+├── seen.json           # State file – tracks already-seen URLs (auto-updated)
+├── requirements.txt    # Python dependencies
 └── .github/
     └── workflows/
-        └── rss-digest.yml  # GitHub Actions – uruchamia skrypt codziennie o 7:00 UTC
+        └── rss-digest.yml  # GitHub Actions workflow (runs every Tuesday)
 ```
 
-## Setup (jednorazowy)
+## Setup
 
-### 1. Utwórz repozytorium na GitHub
+### 1. Create a private GitHub repository and upload all files.
 
-Utwórz **prywatne** repozytorium i wgraj wszystkie pliki.
+### 2. Generate a Gmail App Password
 
-### 2. Wygeneruj Gmail App Password
+1. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+2. Enable 2-Step Verification if not already active
+3. Generate a new App Password (name it e.g. "RSS Digest")
+4. Copy the 16-character code
 
-1. Wejdź na [myaccount.google.com/security](https://myaccount.google.com/security)
-2. Włącz **2-Step Verification** (jeśli nie jest włączona)
-3. Przejdź do **App passwords** → wybierz "Mail" + "Other" → wpisz nazwę np. "RSS Digest"
-4. Skopiuj wygenerowane 16-znakowe hasło
+### 3. Add GitHub Secrets
 
-### 3. Dodaj GitHub Secrets
+Go to **Settings → Secrets and variables → Actions → New repository secret** and add:
 
-W repozytorium: **Settings → Secrets and variables → Actions → New repository secret**
+| Secret | Value |
+|--------|-------|
+| `GMAIL_USER` | your Gmail address |
+| `GMAIL_APP_PASSWORD` | 16-character App Password from step 2 |
+| `RECIPIENT_EMAIL` | recipient email address |
 
-Dodaj trzy sekrety:
+### 4. Enable workflow write permissions
 
-| Nazwa | Wartość |
-|-------|---------|
-| `GMAIL_USER` | twój.email@gmail.com |
-| `GMAIL_APP_PASSWORD` | 16-znakowe hasło z kroku 2 |
-| `RECIPIENT_EMAIL` | email odbiorcy (może być ten sam) |
+Go to **Settings → Actions → General → Workflow permissions** → select **Read and write permissions** → Save.
 
-### 4. Uruchom ręcznie (test)
+### 5. Test manually
 
-W repozytorium: **Actions → RSS Daily Digest → Run workflow**
+Go to **Actions → RSS Daily Digest → Run workflow**.
 
-Jeśli są nowe artykuły – dostaniesz emaila. Jeśli nie ma nic nowego – brak emaila (to prawidłowe zachowanie).
+On first run you will receive all historical items from each source. From the second run onwards, only new items are sent.
 
-## Jak to działa
+## How It Works
 
-1. GitHub Actions uruchamia `checker.py` codziennie o 9:00 czasu warszawskiego
-2. Skrypt pobiera RSS każdego źródła
-3. Porównuje z `seen.json` (lista już widzianych URL)
-4. Jeśli są nowe artykuły → wysyła HTML email
-5. Aktualizuje `seen.json` i commituje z powrotem do repo
+1. GitHub Actions triggers `checker.py` every Tuesday at 07:00 UTC
+2. Script fetches each RSS feed or scrapes each page
+3. Compares results against `seen.json` (previously seen URLs)
+4. If new items found → sends HTML email digest
+5. Updates `seen.json` and commits it back to the repository
 
-## Monitorowane źródła (etap 1 – RSS)
+## Adding a New Source
 
-| Źródło | Feed URL |
-|--------|----------|
-| Loyalty Lion | `https://app.getbeamer.com/loyaltylion/en?rss=true` |
-| Smile.io | `https://blog.smile.io/tag/smile-updates/rss/` (tylko kategoria smile-updates) |
-| Antavo | `https://antavo.com/feed/` |
-
-## Dodawanie nowych źródeł
-
-Edytuj `sources.json` i dodaj obiekt:
-
+### RSS source – add to `sources.json`:
 ```json
 {
-  "name": "Nazwa źródła",
-  "feed_url": "https://przyklad.com/feed",
-  "filter": null
+  "name": "Source Name",
+  "type": "rss",
+  "feed_url": "https://example.com/feed",
+  "category_filter": null
 }
 ```
 
-## Etap 2 (scraping – planowane)
+### Scraper source – add a function to `scrapers.py`, register it in `SCRAPERS`, then add to `sources.json`:
+```json
+{
+  "name": "Source Name",
+  "type": "scraper",
+  "scraper": "Source Name"
+}
+```
 
-Źródła bez RSS do dodania w kolejnym etapie:
-- Influence.io (`/updates`)
-- Talon One (`docs.talon.one/whats-new/product-updates`)
-- Voucherify (`docs.voucherify.io/changelog/changelog`)
+## Dependencies
+
+- `feedparser` – RSS/Atom feed parsing
+- `requests` – HTTP requests for scrapers
+- `beautifulsoup4` – HTML parsing for scrapers
